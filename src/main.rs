@@ -5,7 +5,10 @@ use git2::{build::CheckoutBuilder, Repository};
 use gotham::{
 	handler::assets::FileOptions,
 	helpers::http::response::{create_empty_response, create_response},
-	hyper::StatusCode,
+	hyper::{
+		header::{HeaderValue, LOCATION},
+		StatusCode
+	},
 	router::builder::{build_simple_router, DefineSingleRoute, DrawRoutes},
 	state::FromState
 };
@@ -116,6 +119,13 @@ fn main() {
 					.with_gzip(true)
 					.build()
 			);
+
+			route.get("/").to(|state| {
+				let mut res = create_empty_response(&state, StatusCode::PERMANENT_REDIRECT);
+				res.headers_mut()
+					.insert(LOCATION, HeaderValue::from_static("/web/index.html"));
+				(state, res)
+			})
 		})
 	);
 }

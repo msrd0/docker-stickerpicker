@@ -1,4 +1,5 @@
 use anyhow::bail;
+use clokwerk::{Scheduler, TimeUnits};
 use futures_util::FutureExt;
 use git2::{build::CheckoutBuilder, Repository};
 use gotham::{
@@ -13,7 +14,7 @@ use log::{error, info};
 use once_cell::sync::Lazy;
 use s3::{Bucket, Region};
 use serde::Deserialize;
-use std::{env, path::Path};
+use std::{env, path::Path, time::Duration};
 use tempfile::tempdir;
 
 const REPO_URL: &str = "https://github.com/maunium/stickerpicker";
@@ -68,6 +69,13 @@ fn main() {
 	let repo_dir = tempdir().expect("Failed to create tempdir");
 	let repo_path = repo_dir.path();
 	let repo = clone_repo_to(&repo_path).expect("Failed to download repository");
+
+	let mut scheduler = Scheduler::new();
+	scheduler.every(1.hour()).run(move || match pull_repo(&repo) {
+		Ok(()) => {},
+		Err(e) => error!("Error pulling repository: {}", e)
+	});
+	let _scheduler_thread = scheduler.watch_thread(Duration::from_secs(60));
 
 	gotham::start(
 		"0.0.0.0:8080",

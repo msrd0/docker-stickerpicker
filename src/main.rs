@@ -16,7 +16,7 @@ use gotham_derive::{StateData, StaticResponseExtender};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use s3::{Bucket, Region};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{env, path::Path, time::Duration};
 use tempfile::tempdir;
 
@@ -66,6 +66,14 @@ static BUCKET: Lazy<Bucket> = Lazy::new(|| {
 	Bucket::new_public_with_path_style(&s3_bucket, region).expect("Failed to open bucket")
 });
 
+static HOMESERVER: Lazy<String> = Lazy::new(|| env::var("HOMESERVER").expect("HOMESERVER must be set"));
+
+#[derive(Serialize)]
+struct Index<'a> {
+	packs: Vec<String>,
+	homeserver_url: &'a str
+}
+
 fn main() {
 	env_logger::init();
 
@@ -86,6 +94,34 @@ fn main() {
 			route.get("__ping").to(|state| {
 				let res = create_empty_response(&state, StatusCode::NO_CONTENT);
 				(state, res)
+			});
+
+			route.get("/web/packs/index.json").to_async(|state| {
+				async move {
+					match BUCKET.list("/".to_owned(), Some("/".to_owned())).await {
+						Ok(list) => {
+							let mut packs = list
+								.into_iter()
+								.flat_map(|chunk| chunk.contents.into_iter())
+								.map(|obj| obj.key)
+								.filter(|key| key.ends_with(".json"))
+								.collect::<Vec<_>>();
+							packs.sort_unstable();
+							let index = Index {
+								packs,
+								homeserver_url: &HOMESERVER
+							};
+							let json = serde_json::to_vec(&index).unwrap();
+							let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, json);
+							Ok((state, res))
+						},
+						Err(e) => {
+							error!("Error listing bucket: {}", e);
+							Err((state, e.into()))
+						}
+					}
+				}
+				.boxed()
 			});
 
 			route

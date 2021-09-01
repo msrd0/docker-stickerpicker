@@ -1,4 +1,4 @@
-FROM rust:slim-buster AS rust
+FROM rust:slim-bullseye AS rust
 
 RUN apt-get update -y \
  && apt-get install -y --no-install-recommends ca-certificates libgit2-dev libssl-dev pkgconf
@@ -12,14 +12,14 @@ RUN cargo build --release --locked \
 
 ########################################################################################################################
 
-FROM debian:buster-slim
+FROM debian:bullseye-slim
 
 LABEL org.opencontainer.image.url="https://github.com/users/msrd0/packages/container/package/stickerpicker"
 LABEL org.opencontainer.image.title="Stickerpicker for Element"
 LABEL org.opencontainer.image.source="https://github.com/msrd0/docker-stickerpicker"
 
 RUN apt-get update -y \
- && apt-get install -y --no-install-recommends ca-certificates libgit2-27 \
+ && apt-get install -y --no-install-recommends ca-certificates libgit2-1.1 \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 

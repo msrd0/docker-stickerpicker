@@ -107,7 +107,7 @@ fn main() {
 				.to_async(|mut state| {
 					let path: ProfileExtractor = state.take();
 					async move {
-						match BUCKET.list(dbg!(format!("/{}/", path.profile)), Some("/".to_owned())).await {
+						match BUCKET.list(format!("/{}/", path.profile), Some("/".to_owned())).await {
 							Ok(list) => {
 								let mut packs = list
 									.into_iter()

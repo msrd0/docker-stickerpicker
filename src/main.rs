@@ -56,6 +56,11 @@ struct PathExtractor {
 	parts: Vec<String>
 }
 
+#[derive(Deserialize, StateData, StaticResponseExtender)]
+struct ProfileExtractor {
+	profile: String
+}
+
 static BUCKET: Lazy<Bucket> = Lazy::new(|| {
 	let s3_server = env::var("PACKS_S3_SERVER").expect("PACKS_S3_SERVER must be set");
 	let s3_bucket = env::var("PACKS_S3_BUCKET").expect("PACKS_S3_BUCKET must be set");
@@ -96,36 +101,40 @@ fn main() {
 				(state, res)
 			});
 
-			route.get("/web/packs/index.json").to_async(|state| {
-				async move {
-					match BUCKET.list("/".to_owned(), Some("/".to_owned())).await {
-						Ok(list) => {
-							let mut packs = list
-								.into_iter()
-								.flat_map(|chunk| chunk.contents.into_iter())
-								.map(|obj| obj.key)
-								.filter(|key| key.ends_with(".json"))
-								.collect::<Vec<_>>();
-							packs.sort_unstable();
-							let index = Index {
-								packs,
-								homeserver_url: &HOMESERVER
-							};
-							let json = serde_json::to_vec(&index).unwrap();
-							let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, json);
-							Ok((state, res))
-						},
-						Err(e) => {
-							error!("Error listing bucket: {}", e);
-							Err((state, e.into()))
+			route
+				.get("/:profile/packs/index.json")
+				.with_path_extractor::<ProfileExtractor>()
+				.to_async(|mut state| {
+					let path: ProfileExtractor = state.take();
+					async move {
+						match BUCKET.list(dbg!(format!("/{}/", path.profile)), Some("/".to_owned())).await {
+							Ok(list) => {
+								let mut packs = list
+									.into_iter()
+									.flat_map(|chunk| chunk.contents.into_iter())
+									.map(|obj| obj.key)
+									.filter(|key| key.ends_with(".json"))
+									.collect::<Vec<_>>();
+								packs.sort_unstable();
+								let index = Index {
+									packs,
+									homeserver_url: &HOMESERVER
+								};
+								let json = serde_json::to_vec(&index).unwrap();
+								let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, json);
+								Ok((state, res))
+							},
+							Err(e) => {
+								error!("Error listing bucket: {}", e);
+								Err((state, e.into()))
+							}
 						}
 					}
-				}
-				.boxed()
-			});
+					.boxed()
+				});
 
 			route
-				.get("/web/packs/*")
+				.get("/:profile/packs/*")
 				.with_path_extractor::<PathExtractor>()
 				.to_async(|mut state| {
 					let path = PathExtractor::take_from(&mut state);
@@ -149,7 +158,7 @@ fn main() {
 					.boxed()
 				});
 
-			route.get("/web/*").to_dir(
+			route.get("/:profile/*").to_dir(
 				FileOptions::new(repo_path.join("web"))
 					.with_cache_control("public")
 					.with_gzip(true)

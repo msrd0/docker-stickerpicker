@@ -4,6 +4,15 @@ on:
     branches: [main]
 
 jobs:
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - run: cargo fmt -- --check
+  
   docker:
     runs-on: ubuntu-latest
     steps:

@@ -2,6 +2,7 @@ name: Docker
 on:
   push:
     branches: [main]
+  pull_request:
 
 jobs:
   rustfmt:
@@ -14,6 +15,7 @@ jobs:
       - run: cargo fmt -- --check
   
   docker:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

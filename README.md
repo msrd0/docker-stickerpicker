@@ -42,7 +42,7 @@ Environment variable:
 * enter `/devtools` in a chat in element.
 * go to: Explore Account Data -> m.widgets
 * change the json to:
-```json
+```yaml
 {
 	"stickerpicker": {
 		"content": {

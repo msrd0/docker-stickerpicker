@@ -16,7 +16,7 @@ Docker container to host https://github.com/maunium/stickerpicker with a self-ho
 
 ### setup:
 docker-compose:
-```json
+```yaml
 stickerpicker:
   image: ghcr.io/msrd0/stickerpicker
   environment:
@@ -42,7 +42,7 @@ Environment variable:
 * enter `/devtools` in a chat in element.
 * go to: Explore Account Data -> m.widgets
 * change the json to:
-```yaml
+```json
 {
 	"stickerpicker": {
 		"content": {

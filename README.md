@@ -22,7 +22,7 @@ todo
 Environment variable:
 * PACKS_S3_SERVER  the url of your s3 server
 * PACKS_S3_BUCKET  the name of your s3 bucket
-* HOMESERVER       publicly accessible homeserver url, wihch does render the preview images; Can be different from the server, where the stickers are saved
+* HOMESERVER       publicly accessible homeserver url, which is used to render the preview images; can be different from the server, where the stickers are saved
 
 ### add sticker packs:
 * create a stickerpack using the [stickerpicker-import/creating script](https://github.com/maunium/stickerpicker/wiki/Creating-packs)
@@ -32,7 +32,7 @@ Environment variable:
 
 ## Settup Client:
 * enter `/devtools` in a chat in element.
-* go to: Explore Account Datat -> m.widgets
+* go to: Explore Account Data -> m.widgets
 * change the json to:
 ```json
 {

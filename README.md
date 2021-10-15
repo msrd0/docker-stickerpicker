@@ -17,7 +17,15 @@ Docker container to host https://github.com/maunium/stickerpicker with a self-ho
 ### setup:
 docker-compose:
 ```json
-todo
+stickerpicker:
+  image: ghcr.io/msrd0/stickerpicker
+  environment:
+    - "HOMESERVER=https://MATRIX.SERVER.URL"
+    - "PACKS_S3_SERVER=https://S3.SERVER.URL"
+    - "PACKS_S3_BUCKET=stickerpicker"
+  ports:
+    - "8080:8080"
+  restart: unless-stopped
 ```
 Environment variable:
 * PACKS_S3_SERVER  the url of your s3 server

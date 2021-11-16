@@ -3,16 +3,16 @@ use clokwerk::{Scheduler, TimeUnits};
 use futures_util::FutureExt;
 use git2::{build::CheckoutBuilder, Repository};
 use gotham::{
-	handler::assets::FileOptions,
+	handler::FileOptions,
 	helpers::http::response::{create_empty_response, create_response},
 	hyper::{
 		header::{HeaderValue, LOCATION},
 		StatusCode
 	},
-	router::builder::{build_simple_router, DefineSingleRoute, DrawRoutes},
-	state::FromState
+	mime::{APPLICATION_JSON, APPLICATION_OCTET_STREAM},
+	prelude::*,
+	router::builder::build_simple_router
 };
-use gotham_derive::{StateData, StaticResponseExtender};
 use log::{error, info};
 use once_cell::sync::Lazy;
 use s3::{Bucket, Region};
@@ -121,7 +121,7 @@ fn main() {
 									homeserver_url: &HOMESERVER
 								};
 								let json = serde_json::to_vec(&index).unwrap();
-								let res = create_response(&state, StatusCode::OK, mime::APPLICATION_JSON, json);
+								let res = create_response(&state, StatusCode::OK, APPLICATION_JSON, json);
 								Ok((state, res))
 							},
 							Err(e) => {
@@ -144,7 +144,7 @@ fn main() {
 						match BUCKET.get_object(&path).await {
 							Ok((data, code)) => {
 								info!("Found object {} ({})", path, code);
-								let mime = mime_guess::from_path(&path).first().unwrap_or(mime::APPLICATION_OCTET_STREAM);
+								let mime = mime_guess::from_path(&path).first().unwrap_or(APPLICATION_OCTET_STREAM);
 								let code = StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 								let res = create_response(&state, code, mime, data);
 								Ok((state, res))
@@ -172,5 +172,6 @@ fn main() {
 				(state, res)
 			})
 		})
-	);
+	)
+	.expect("Failed to start gotham server");
 }

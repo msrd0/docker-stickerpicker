@@ -62,16 +62,21 @@ struct ProfileExtractor {
 }
 
 static BUCKET: Lazy<Bucket> = Lazy::new(|| {
-	let s3_server = env::var("PACKS_S3_SERVER").expect("PACKS_S3_SERVER must be set");
-	let s3_bucket = env::var("PACKS_S3_BUCKET").expect("PACKS_S3_BUCKET must be set");
+	let s3_server =
+		env::var("PACKS_S3_SERVER").expect("PACKS_S3_SERVER must be set");
+	let s3_bucket =
+		env::var("PACKS_S3_BUCKET").expect("PACKS_S3_BUCKET must be set");
 	let region = Region::Custom {
 		region: s3_server.clone(),
 		endpoint: s3_server
 	};
-	Bucket::new_public_with_path_style(&s3_bucket, region).expect("Failed to open bucket")
+	Bucket::new_public(&s3_bucket, region)
+		.expect("Failed to open bucket")
+		.with_path_style()
 });
 
-static HOMESERVER: Lazy<String> = Lazy::new(|| env::var("HOMESERVER").expect("HOMESERVER must be set"));
+static HOMESERVER: Lazy<String> =
+	Lazy::new(|| env::var("HOMESERVER").expect("HOMESERVER must be set"));
 
 #[derive(Serialize)]
 struct Index<'a> {
@@ -87,10 +92,12 @@ fn main() {
 	let repo = clone_repo_to(&repo_path).expect("Failed to download repository");
 
 	let mut scheduler = Scheduler::new();
-	scheduler.every(1.hour()).run(move || match pull_repo(&repo) {
-		Ok(()) => {},
-		Err(e) => error!("Error pulling repository: {}", e)
-	});
+	scheduler
+		.every(1.hour())
+		.run(move || match pull_repo(&repo) {
+			Ok(()) => {},
+			Err(e) => error!("Error pulling repository: {}", e)
+		});
 	let _scheduler_thread = scheduler.watch_thread(Duration::from_secs(60));
 
 	gotham::start(
@@ -107,7 +114,13 @@ fn main() {
 				.to_async(|mut state| {
 					let path: ProfileExtractor = state.take();
 					async move {
-						match BUCKET.list(format!("/{}/", path.profile), Some("/".to_owned())).await {
+						match BUCKET
+							.list(
+								format!("/{}/", path.profile),
+								Some("/".to_owned())
+							)
+							.await
+						{
 							Ok(list) => {
 								let mut packs = list
 									.into_iter()
@@ -121,7 +134,12 @@ fn main() {
 									homeserver_url: &HOMESERVER
 								};
 								let json = serde_json::to_vec(&index).unwrap();
-								let res = create_response(&state, StatusCode::OK, APPLICATION_JSON, json);
+								let res = create_response(
+									&state,
+									StatusCode::OK,
+									APPLICATION_JSON,
+									json
+								);
 								Ok((state, res))
 							},
 							Err(e) => {
@@ -144,8 +162,11 @@ fn main() {
 						match BUCKET.get_object(&path).await {
 							Ok((data, code)) => {
 								info!("Found object {} ({})", path, code);
-								let mime = mime_guess::from_path(&path).first().unwrap_or(APPLICATION_OCTET_STREAM);
-								let code = StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+								let mime = mime_guess::from_path(&path)
+									.first()
+									.unwrap_or(APPLICATION_OCTET_STREAM);
+								let code = StatusCode::from_u16(code)
+									.unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 								let res = create_response(&state, code, mime, data);
 								Ok((state, res))
 							},
@@ -166,7 +187,8 @@ fn main() {
 			);
 
 			route.get("/").to(|state| {
-				let mut res = create_empty_response(&state, StatusCode::PERMANENT_REDIRECT);
+				let mut res =
+					create_empty_response(&state, StatusCode::PERMANENT_REDIRECT);
 				res.headers_mut()
 					.insert(LOCATION, HeaderValue::from_static("/web/index.html"));
 				(state, res)

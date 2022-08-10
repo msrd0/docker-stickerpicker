@@ -15,7 +15,7 @@ use gotham::{
 };
 use log::{error, info};
 use once_cell::sync::Lazy;
-use s3::{Bucket, Region};
+use s3::{request_trait::ResponseData, Bucket, Region};
 use serde::{Deserialize, Serialize};
 use std::{env, path::Path, time::Duration};
 use tempfile::tempdir;
@@ -160,14 +160,23 @@ fn main() {
 					info!("Fetching {} from bucket", path);
 					async move {
 						match BUCKET.get_object(&path).await {
-							Ok((data, code)) => {
-								info!("Found object {} ({})", path, code);
+							Ok(data) => {
+								info!(
+									"Found object {} ({})",
+									path,
+									data.status_code()
+								);
 								let mime = mime_guess::from_path(&path)
 									.first()
 									.unwrap_or(APPLICATION_OCTET_STREAM);
-								let code = StatusCode::from_u16(code)
+								let code = StatusCode::from_u16(data.status_code())
 									.unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-								let res = create_response(&state, code, mime, data);
+								let res = create_response(
+									&state,
+									code,
+									mime,
+									<ResponseData as Into<Vec<u8>>>::into(data)
+								);
 								Ok((state, res))
 							},
 							Err(e) => {

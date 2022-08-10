@@ -15,9 +15,9 @@ use gotham::{
 };
 use log::{error, info};
 use once_cell::sync::Lazy;
-use s3::{request_trait::ResponseData, Bucket, Region};
+use s3::{error::S3Error, request_trait::ResponseData, Bucket, Region};
 use serde::{Deserialize, Serialize};
-use std::{env, path::Path, time::Duration};
+use std::{collections::BTreeMap, env, path::Path, time::Duration};
 use tempfile::tempdir;
 
 const REPO_URL: &str = "https://github.com/maunium/stickerpicker";
@@ -84,6 +84,95 @@ struct Index<'a> {
 	homeserver_url: &'a str
 }
 
+async fn get_bucket_index(profile: &str) -> Result<Index, S3Error> {
+	let list = BUCKET
+		.list(format!("/{profile}/"), Some("/".to_owned()))
+		.await?;
+
+	let mut packs = list
+		.into_iter()
+		.flat_map(|chunk| chunk.contents.into_iter())
+		.map(|obj| obj.key)
+		.filter(|key| key.ends_with(".json"))
+		.collect::<Vec<_>>();
+	packs.sort_unstable();
+	Ok(Index {
+		packs,
+		homeserver_url: &HOMESERVER
+	})
+}
+
+#[derive(Serialize)]
+struct Ponies {
+	images: BTreeMap<String, Image>,
+	pack: Pack
+}
+
+#[derive(Serialize)]
+struct Image {
+	body: String,
+	info: ImageInfo,
+	url: String,
+	usage: Vec<String>
+}
+
+#[derive(Deserialize, Serialize)]
+struct ImageInfo {
+	w: usize,
+	h: usize,
+	size: usize,
+	mimetype: String
+}
+
+#[derive(Serialize)]
+struct Pack {
+	display_name: String
+}
+
+#[derive(Deserialize)]
+struct MauniumStickerPack {
+	stickers: Vec<MauniumSticker>
+}
+
+#[derive(Deserialize)]
+struct MauniumSticker {
+	body: String,
+	url: String,
+	info: ImageInfo,
+	#[serde(rename = "net.maunium.telegram.sticker")]
+	telegram_sticker: MauniumTelegramSticker
+}
+
+#[derive(Deserialize)]
+struct MauniumTelegramSticker {
+	id: String
+}
+
+async fn user_emotes(profile: &str) -> anyhow::Result<Ponies> {
+	let index = get_bucket_index(profile).await?;
+	let mut ponies = Ponies {
+		images: BTreeMap::new(),
+		pack: Pack {
+			display_name: "Sticker Pack".to_owned()
+		}
+	};
+
+	for pack in index.packs {
+		let json = BUCKET.get_object(pack).await?;
+		let pack: MauniumStickerPack = serde_json::from_slice(json.bytes())?;
+		for sticker in pack.stickers {
+			ponies.images.insert(sticker.telegram_sticker.id, Image {
+				body: sticker.body,
+				url: sticker.url,
+				info: sticker.info,
+				usage: vec!["sticker".to_owned()]
+			});
+		}
+	}
+
+	Ok(ponies)
+}
+
 fn main() {
 	env_logger::init();
 
@@ -114,25 +203,8 @@ fn main() {
 				.to_async(|mut state| {
 					let path: ProfileExtractor = state.take();
 					async move {
-						match BUCKET
-							.list(
-								format!("/{}/", path.profile),
-								Some("/".to_owned())
-							)
-							.await
-						{
-							Ok(list) => {
-								let mut packs = list
-									.into_iter()
-									.flat_map(|chunk| chunk.contents.into_iter())
-									.map(|obj| obj.key)
-									.filter(|key| key.ends_with(".json"))
-									.collect::<Vec<_>>();
-								packs.sort_unstable();
-								let index = Index {
-									packs,
-									homeserver_url: &HOMESERVER
-								};
+						match get_bucket_index(&path.profile).await {
+							Ok(index) => {
 								let json = serde_json::to_vec(&index).unwrap();
 								let res = create_response(
 									&state,
@@ -143,7 +215,33 @@ fn main() {
 								Ok((state, res))
 							},
 							Err(e) => {
-								error!("Error listing bucket: {}", e);
+								error!("Error listing bucket: {e}");
+								Err((state, e.into()))
+							}
+						}
+					}
+					.boxed()
+				});
+
+			route
+				.get("/:profile/im.ponies.user_emotes")
+				.with_path_extractor::<ProfileExtractor>()
+				.to_async(|mut state| {
+					let path: ProfileExtractor = state.take();
+					async move {
+						match user_emotes(&path.profile).await {
+							Ok(emotes) => {
+								let json = serde_json::to_vec(&emotes).unwrap();
+								let res = create_response(
+									&state,
+									StatusCode::OK,
+									APPLICATION_JSON,
+									json
+								);
+								Ok((state, res))
+							},
+							Err(e) => {
+								error!("Error creating user emotes: {e}");
 								Err((state, e.into()))
 							}
 						}
@@ -180,7 +278,7 @@ fn main() {
 								Ok((state, res))
 							},
 							Err(e) => {
-								error!("Error fetching {}: {}", path, e);
+								error!("Error fetching {path}: {e}");
 								Err((state, e.into()))
 							}
 						}

@@ -13,11 +13,12 @@ use gotham::{
 	prelude::*,
 	router::builder::build_simple_router
 };
+use indexmap::IndexMap;
 use log::{error, info};
 use once_cell::sync::Lazy;
 use s3::{error::S3Error, request_trait::ResponseData, Bucket, Region};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, env, path::Path, time::Duration};
+use std::{env, path::Path, time::Duration};
 use tempfile::tempdir;
 
 const REPO_URL: &str = "https://github.com/maunium/stickerpicker";
@@ -104,7 +105,7 @@ async fn get_bucket_index(profile: &str) -> Result<Index, S3Error> {
 
 #[derive(Serialize)]
 struct Ponies {
-	images: BTreeMap<String, Image>,
+	images: IndexMap<String, Image>,
 	pack: Pack
 }
 
@@ -151,7 +152,7 @@ struct MauniumTelegramSticker {
 async fn user_emotes(profile: &str) -> anyhow::Result<Ponies> {
 	let index = get_bucket_index(profile).await?;
 	let mut ponies = Ponies {
-		images: BTreeMap::new(),
+		images: IndexMap::new(),
 		pack: Pack {
 			display_name: "Sticker Pack".to_owned()
 		}
